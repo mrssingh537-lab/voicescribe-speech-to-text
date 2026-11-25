@@ -1,145 +1,171 @@
-# VoiceScribe - Local Deep Learning Speech-to-Text System
+# VoiceScribe: Speech-to-Text Using Deep Learning
 
-VoiceScribe is an end-to-end, local-only web application that transcribes speech into formatted text with timestamps and speaker separation using OpenAI's **Whisper Large-v3 Turbo** neural model.
+VoiceScribe is an end-to-end web application that converts speech into timestamped text using OpenAI's **Whisper** models. It is a **dual-engine** system: run transcription **100% locally** with Whisper Large-v3 Turbo, or switch to a **Cloud Whisper API** (OpenAI / Groq) for fast results on any laptop. The engine can be changed at any time from the interface.
 
-All machine learning inference runs **100% locally on your machine**. No audio or video data is ever sent to third-party or paid cloud APIs.
-
----
+![Home](docs/images/home.png)
 
 ## Features
 
-- **Audio File Transcription**: Drag-and-drop or browse `.wav`, `.mp3`, `.m4a`, `.aac`, `.flac`, `.ogg` audio files.
-- **Video to Audio Extraction**: Upload `.mp4`, `.mkv`, `.mov`, `.avi`, `.webm` videos; audio is extracted via FFmpeg and transcribed automatically.
-- **Speaker Diarization (Multi-Speaker)**: Separate distinct speakers in meetings and interviews ("Speaker 1", "Speaker 2", etc.) using `pyannote.audio` (if HuggingFace token provided) or built-in local MFCC + spectral clustering fallback.
-- **Live In-Browser Recording**: Record speech directly from the microphone with live elapsed timer and real-time audio waveform visualization.
-- **Timestamped & Subtitle Export**: View transcripts with segment timestamps and download as clean `.txt` or standard SubRip `.srt` subtitles.
-- **Transcript History**: SQLite database persists all transcripts with search, full-text viewer modal, and deletion controls.
-- **Local-Only Model Architecture**: Preloads Whisper Large-v3 Turbo once on server startup with automatic CUDA float16 / CPU float32 detection.
-- **Concurrency Protection**: Background job queue with an execution lock prevents GPU/CPU out-of-memory errors by ensuring one active transcription at a time.
+- **Audio transcription:** drag-and-drop `.wav`, `.mp3`, `.m4a`, `.aac`, `.flac`, `.ogg` files (up to 500 MB).
+- **Video support:** upload `.mp4`, `.mkv`, `.mov`, `.avi`, `.webm`; audio is extracted with FFmpeg.
+- **Live recording:** record from the browser microphone with a timer and waveform.
+- **Two engines:** Local Whisper Large-v3 Turbo (PyTorch, CUDA float16 / CPU float32) or Cloud Whisper API (OpenAI `whisper-1`, `gpt-transcribe`, Groq Whisper).
+- **Language support:** automatic language detection or manual choice from 21 languages.
+- **Translation:** choose a desired output language; timestamps and speaker labels are preserved.
+- **Speaker diarization:** "Speaker 1", "Speaker 2" labels using `pyannote.audio` (with a Hugging Face token) or a built-in MFCC clustering fallback.
+- **Export:** timestamped view, copy to clipboard, download as `.txt` or `.srt`.
+- **History:** SQLite-backed, searchable, with view, download and delete.
+- **Settings dialog:** switch engines, pick OpenAI/Groq presets, store and test an API key from the UI.
+- **Job queue:** one transcription runs at a time to avoid GPU/CPU memory overload; live progress stages.
+- **Dark and light themes.**
 
----
+| Result | History |
+|---|---|
+| ![Result](docs/images/result.png) | ![History](docs/images/history.png) |
 
-## Hardware Requirements & Notes
+## Local vs Cloud
 
-- **GPU (Recommended)**: NVIDIA GPU with CUDA support and at least **6 GB VRAM**. Whisper Large-v3 Turbo runs with `float16` precision and transcribes files several times faster than real-time.
-- **CPU**: Works on any modern multi-core CPU using `float32`. CPU inference takes longer (especially on longer audio files), but produces identical high accuracy.
-- **First Run Download**: On first startup, the Whisper Large-v3 Turbo weights (~1.6 GB) will be automatically downloaded and cached locally by OpenAI Whisper in `~/.cache/whisper`. Subsequent runs load immediately from disk.
+| | Local Whisper | Cloud API |
+|---|---|---|
+| Where it runs | Your computer | OpenAI / Groq servers |
+| Audio privacy | Audio never leaves your machine | Audio is sent over HTTPS to the provider |
+| Hardware | NVIDIA GPU with ~6 GB VRAM recommended; CPU works but is slower | Any laptop |
+| Cost | No API fees | Per-use billing |
+| Setup | No key needed | API key required |
 
----
+> **Privacy note:** in Local mode audio is never transmitted. If you choose a desired output language, the transcript **text** (not audio) is sent to a translation service (an LLM endpoint if an API key is configured, otherwise Google GTX or MyMemory). Choosing "Original / Same as Spoken" keeps everything offline.
 
 ## Prerequisites
 
-1. **Python 3.10+** (Tested on Python 3.12)
-2. **Node.js 18+ & npm**
-3. **FFmpeg** installed and accessible on system `PATH`.
-   - *Windows*: Download from [gyan.dev/ffmpeg](https://www.gyan.dev/ffmpeg/builds/) or install via `winget install Gyan.FFmpeg`.
-   - *macOS*: `brew install ffmpeg`
-   - *Linux*: `sudo apt install ffmpeg`
+1. **Python 3.10+** (tested on 3.12)
+2. **Node.js 18+** and npm
+3. **FFmpeg** on your system `PATH`
+   - Windows: `winget install Gyan.FFmpeg`
+   - macOS: `brew install ffmpeg`
+   - Linux: `sudo apt install ffmpeg`
 
----
+On first run, Local mode downloads the Whisper Large-v3 Turbo weights (~1.6 GB) to `~/.cache/whisper`.
 
-## Setup & Installation
+## Setup
 
-### 1. Backend Setup
+### Backend
 
 ```bash
 cd backend
-
-# Create virtual environment (if not already created)
 python -m venv venv
 
-# Activate virtual environment
-# Windows:
+# Windows
 .\venv\Scripts\activate
-# Linux/macOS:
+# Linux / macOS
 source venv/bin/activate
 
-# Optional: If you have an NVIDIA GPU, install PyTorch with CUDA first:
+# Optional, for NVIDIA GPUs: install PyTorch with CUDA first
 # pip install torch torchaudio --index-url https://download.pytorch.org/whl/cu121
 
-# Install backend dependencies
 pip install -r requirements.txt
 
-# Configure environment variables (optional)
+# Windows: copy .env.example .env     Linux/macOS: cp .env.example .env
 cp .env.example .env
 ```
 
-#### Environment Variables (`backend/.env`)
+### Frontend
+
+```bash
+cd frontend
+npm install
+```
+
+## Configuration (`backend/.env`)
 
 ```ini
 HOST=127.0.0.1
 PORT=8000
 CORS_ORIGINS=http://localhost:5173,http://127.0.0.1:5173
 
-# Provider & Model Settings
+# Engine: "local" (offline Whisper) or "api" (cloud Whisper)
 TRANSCRIPTION_MODE=local
 WHISPER_MODEL=turbo
-DEVICE=auto    # "auto" (detects CUDA or CPU), "cuda", or "cpu"
+DEVICE=auto            # auto, cuda, or cpu
 
-# Upload Limits
+# Cloud API (needed only when TRANSCRIPTION_MODE=api)
+TRANSCRIPTION_API_KEY=
+TRANSCRIPTION_API_URL=https://api.openai.com/v1/audio/transcriptions
+TRANSCRIPTION_API_MODEL=whisper-1     # or gpt-transcribe, or whisper-large-v3-turbo for Groq
+# TRANSCRIPTION_RESPONSE_FORMAT=      # optional: verbose_json, json, text
+
 MAX_UPLOAD_SIZE_MB=500
 
-# Optional HuggingFace Token for pyannote.audio diarization
-# If empty, VoiceScribe falls back to local MFCC clustering automatically
+# Optional Hugging Face token for pyannote.audio diarization.
+# If empty, an MFCC clustering fallback is used.
 HF_TOKEN=
 
-# Storage & Database
 DATABASE_URL=sqlite:///./storage/voicescribe.db
 STORAGE_DIR=./storage
 UPLOAD_DIR=./storage/uploads
 ```
 
-### 2. Frontend Setup
+You can also set the engine and API key from the **Settings** dialog in the app; changes are saved to `backend/.env`. **Never commit `.env`**; it is listed in `.gitignore`.
 
-```bash
-cd ../frontend
+## Run
 
-# Install dependencies
-npm install
-```
-
----
-
-## Running the Application
-
-### Start Backend
-
-In the `backend` directory (with `venv` activated):
+Backend (in `backend/`, venv activated):
 
 ```bash
 python -m uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload
 ```
 
-The backend server starts on `http://127.0.0.1:8000`. On first load, it will initialize the database and load Whisper Large-v3 Turbo.
-
-### Start Frontend
-
-In the `frontend` directory:
+Frontend (in `frontend/`):
 
 ```bash
 npm run dev
 ```
 
-The frontend will be available at `http://localhost:5173` (or `http://127.0.0.1:5173`).
+Open http://localhost:5173.
 
----
-
-## API Endpoints
+## API
 
 | Method | Endpoint | Description |
 |---|---|---|
-| `GET` | `/api/health` | Model status, device (cuda/cpu), model name, mode |
-| `POST` | `/api/transcribe` | Submit file (`audio`, `video`, `recording`) with diarization & language options |
-| `GET` | `/api/jobs/{id}` | Polling status, stage, progress (0-100), and result |
-| `GET` | `/api/history` | List previous transcripts with search filter |
-| `GET` | `/api/history/{id}` | Full transcript detail and segment timestamps |
-| `DELETE` | `/api/history/{id}` | Remove transcript from database |
-| `GET` | `/api/history/{id}/download?format=txt\|srt` | Download transcript as `.txt` or `.srt` subtitle |
+| `GET` | `/api/health` | Engine readiness, device, model, mode |
+| `POST` | `/api/transcribe` | Submit a file with diarization, spoken language, desired language and provider options; returns a job ID |
+| `GET` | `/api/jobs/{id}` | Job status, stage, progress (0-100), provider, model and result |
+| `GET` | `/api/settings` | Current provider configuration (API key masked) |
+| `POST` | `/api/settings` | Update mode, API key, endpoint, model |
+| `POST` | `/api/settings/test-api` | Test the API key and endpoint |
+| `GET` | `/api/history` | List transcripts (optional `search`) |
+| `GET` | `/api/history/{id}` | Full transcript with segments |
+| `DELETE` | `/api/history/{id}` | Delete a transcript |
+| `GET` | `/api/history/{id}/download?format=txt\|srt` | Download as TXT or SRT |
 
----
+## Architecture
 
-## Architecture & Future-Proofing
+```
+React (Vite, Tailwind)  ->  FastAPI  ->  Job queue (one at a time)
+                                          |-> FFmpeg + Librosa (16 kHz mono)
+                                          |-> TranscriptionProvider
+                                          |     |-> LocalWhisperProvider   (Whisper Large-v3 Turbo, PyTorch)
+                                          |     `-> ApiTranscriptionProvider (OpenAI / Groq Whisper)
+                                          |-> Diarization (pyannote / MFCC)
+                                          |-> Translation (LLM -> Google GTX -> MyMemory)
+                                          `-> SQLite history
+```
 
-VoiceScribe implements a modular `TranscriptionProvider` interface (`backend/app/services/providers/base.py`):
-- `LocalWhisperProvider` (`backend/app/services/providers/local_whisper.py`) runs local Whisper Large-v3 Turbo.
-- A clearly documented extension point is provided for future cloud API providers (e.g. OpenAI API, custom endpoints) without changing the FastAPI routers, job queue, or frontend.
+Both engines implement the `TranscriptionProvider` interface in `backend/app/services/providers/base.py`, so the routers, job queue and frontend are the same for either engine. The Cloud provider chooses a compatible response format per model, compresses large files, and never falls back silently to Local mode.
+
+## Tests
+
+From `backend/`:
+
+```bash
+python test_models_transcribe.py                    # provider, format and translation unit tests
+python test_integration_language_and_status.py      # job-level integration tests
+python test_e2e.py                                  # needs the server running on port 8000
+```
+
+## Limitations
+
+- Translation uses online services (LLM, Google GTX, MyMemory).
+- The MFCC diarization fallback is less accurate than `pyannote.audio`.
+- Job progress is kept in memory and is lost if the server restarts (saved transcripts are kept).
+- The API key is stored in plain text in the local `.env`; this is intended for single-user local use.
+
