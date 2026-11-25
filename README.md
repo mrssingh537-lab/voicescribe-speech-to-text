@@ -2,8 +2,6 @@
 
 VoiceScribe is an end-to-end web application that converts speech into timestamped text using OpenAI's **Whisper** models. It is a **dual-engine** system: run transcription **100% locally** with Whisper Large-v3 Turbo, or switch to a **Cloud Whisper API** (OpenAI / Groq) for fast results on any laptop. The engine can be changed at any time from the interface.
 
-![Home](<img width="1414" height="1078" alt="home" src="https://github.com/user-attachments/assets/035da6da-147f-4576-af3c-bd29dd71d2d7" />
-)
 
 ## Features
 
@@ -20,10 +18,6 @@ VoiceScribe is an end-to-end web application that converts speech into timestamp
 - **Job queue:** one transcription runs at a time to avoid GPU/CPU memory overload; live progress stages.
 - **Dark and light themes.**
 
-| Result | 
-|---|---|
-| ![Result](<img width="1281" height="904" alt="result" src="https://github.com/user-attachments/assets/45de3499-1270-48d6-8c5b-cfb1ade4e013" />
-) 
 
 ## Local vs Cloud
 
