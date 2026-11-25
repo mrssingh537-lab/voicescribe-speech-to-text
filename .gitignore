@@ -1,0 +1,25 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+venv/
+.env
+storage/uploads/*
+!storage/uploads/.gitkeep
+storage/*.db
+storage/*.db-journal
+
+# Node & Frontend
+node_modules/
+dist/
+.vite/
+*.local
+
+# Logs
+*.log
+
+# Backend storage (any depth)
+**/storage/*.db
+**/storage/*.db-journal
+**/storage/uploads/*
+!**/storage/uploads/.gitkeep
